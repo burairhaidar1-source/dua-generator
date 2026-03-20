@@ -17,12 +17,7 @@ ID_URDU            = "109"
 
 # ── parser ────────────────────────────────────────────────────────────────────
 
-def parse_duas(text: str) -> list[dict]:
-    """
-    Parse plain text into a list of dua dicts.
-    Each set is 4 non-blank lines (Arabic / Transliteration / English / Urdu)
-    separated by a blank line.
-    """
+def parse_duas(text: str) -> list:
     sets, buf = [], []
     for raw in text.splitlines():
         s = raw.strip()
@@ -37,6 +32,21 @@ def parse_duas(text: str) -> list[dict]:
         sets.append({"arabic": buf[0], "transliteration": buf[1],
                      "english": buf[2], "urdu": buf[3]})
     return sets
+
+
+# ── serialisation helper ──────────────────────────────────────────────────────
+
+def _dom_to_bytes(dom) -> bytes:
+    """
+    Serialise a minidom document to UTF-8 bytes WITHOUT the XML declaration.
+    The declaration (<?xml version="1.0" encoding="utf-8"?>) confuses
+    PowerPoint and causes the 'found a problem with content' repair prompt.
+    """
+    raw = dom.toxml(encoding="utf-8")          # bytes, starts with <?xml...?>
+    # strip the declaration line
+    if raw.startswith(b"<?xml"):
+        raw = raw[raw.index(b"?>") + 2:].lstrip(b"\n\r")
+    return raw
 
 
 # ── XML helpers ───────────────────────────────────────────────────────────────
@@ -157,21 +167,17 @@ def _fill_slide_xml(xml_bytes: bytes, dua: dict) -> bytes:
             if paras:
                 _collapse_runs(paras[0], dua["transliteration"])
 
-    return dom.toxml(encoding="utf-8")
+    return _dom_to_bytes(dom)
 
 
 # ── main public function ──────────────────────────────────────────────────────
 
-def build_pptx_bytes(template_bytes: bytes, duas: list[dict]) -> bytes:
-    """
-    Given template PPTX as bytes and a list of dua dicts,
-    return the generated PPTX as bytes.
-    """
+def build_pptx_bytes(template_bytes: bytes, duas: list) -> bytes:
     with zipfile.ZipFile(io.BytesIO(template_bytes), "r") as zin:
         names     = zin.namelist()
         file_data = {n: zin.read(n) for n in names}
 
-    prs_dom   = minidom.parseString(file_data["ppt/presentation.xml"])
+    prs_dom     = minidom.parseString(file_data["ppt/presentation.xml"])
     slide1_xml  = file_data["ppt/slides/slide1.xml"]
     slide1_rels = file_data.get("ppt/slides/_rels/slide1.xml.rels", b"")
 
@@ -225,7 +231,7 @@ def build_pptx_bytes(template_bytes: bytes, duas: list[dict]) -> bytes:
             sld_id_elem.setAttribute("r:id", rid)
             sld_id_lst.appendChild(sld_id_elem)
 
-    new_files["ppt/presentation.xml"]            = prs_dom.toxml(encoding="utf-8")
+    new_files["ppt/presentation.xml"]            = _dom_to_bytes(prs_dom)
     new_files["ppt/_rels/presentation.xml.rels"] = prs_rels_xml.encode("utf-8")
     new_files["[Content_Types].xml"]             = content_types_xml.encode("utf-8")
 
