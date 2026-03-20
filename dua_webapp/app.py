@@ -174,7 +174,7 @@ Save the file as plain `.txt` with **UTF-8** encoding.
 
 # ── upload ────────────────────────────────────────────────────────────────────
 st.markdown('<div class="step-label">Step 1 — Upload your duas text file</div>', unsafe_allow_html=True)
-uploaded = st.file_uploader("", type=["txt", ""], label_visibility="collapsed")
+uploaded = st.file_uploader("", type=["txt"], label_visibility="collapsed")
 
 if uploaded:
     raw_text = uploaded.read().decode("utf-8")
